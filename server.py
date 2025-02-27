@@ -136,6 +136,13 @@ def decrypt():
         return jsonify({"url": decrypted_url})
     except:
         return jsonify({"error": "Decryption failed"}), 400
+        
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({
+        "message": "مرحبًا! هذا API لإدارة الروابط. استخدم /save-link لإضافة رابط، و /get-link/<id> لجلبه.",
+        "status": "success"
+    })        
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
