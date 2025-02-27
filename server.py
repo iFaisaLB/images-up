@@ -53,7 +53,7 @@ IMG_BB_API_KEY = '7df41720671e5063a5a28347fce407a8'
 
 @app.route('/')
 def index():
-    return send_from_directory('static', 'index.html')
+    return send_from_directory('templates', 'index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
