@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <title>رفع الصور إلى رابط مباشر</title>
+    <style>
+        :root {
+            --primary: #2196F3;
+            --success: #4CAF50;
+            --error: #f44336;
+        }
+
+        body {
+            font-family: Tahoma, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .upload-box {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 2px dashed #ddd;
+            margin: 2rem 0;
+            transition: 0.3s;
+        }
+
+        .upload-box.dragover {
+            border-color: var(--primary);
+            background: #f8f9ff;
+        }
+
+        #uploadBtn {
+            background: var(--primary);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: 0.3s;
+        }
+
+        #uploadBtn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        #result {
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .success {
+            background: #e8f5e9;
+            border: 1px solid var(--success);
+        }
+
+        .error {
+            background: #ffebee;
+            border: 1px solid var(--error);
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center; color: #292929;">رفع الصور بسهولة 🚀</h1>
+    
+    <div class="upload-box" id="dropZone">
+        <input type="file" id="fileInput" accept="image/*" hidden>
+        <button id="uploadBtn" onclick="document.getElementById('fileInput').click()">
+            📤 اختر صورة للرفع
+        </button>
+        <p style="margin-top: 1rem; color: #666;">أو اسحب الصورة هنا</p>
+    </div>
+
+    <!-- معاينة الصورة -->
+    <div id="imagePreview" style="display: none; margin: 20px 0; text-align: center;">
+        <img id="previewImage" src="#" alt="معاينة الصورة" style="max-width: 300px; border-radius: 8px;">
+    </div>
+
+    <!-- قسم عرض الرابط بعد الرفع -->
+    <div id="linkContainer" style="display: none; background: #e8f5e9; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+        <h4 style="color: #4CAF50;">🔗 رابط الصورة المرفوعة:</h4>
+        <input type="text" id="uploadedLink" 
+            style="width: 100%; padding: 10px; border: 1px solid #81c784; border-radius: 5px; margin: 10px 0;">
+        <button onclick="copyLink()" 
+            style="background: #4CAF50; color: white; padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer;">
+            نسخ الرابط
+        </button>
+    </div>
+
+    <!-- قسم إخفاء الرابط خلف نص مخصص -->
+    <div style="margin-top: 2rem; padding: 1rem; background: #fff3e0; border-radius: 8px;">
+        <h4>🎭 إخفاء الرابط خلف نص</h4>
+        <input type="text" id="hiddenText" placeholder="اكتب النص الذي تريد إظهاره" 
+            style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ffcc80;">
+            <button onclick="hideLink('${url}')" 
+                style="background: #ff9800; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+                إنشاء النص المخفي
+            </button>
+        <div id="hiddenOutput" style="margin-top: 10px; cursor: pointer;" onclick="copyHidden()">
+            <!-- الناتج سيظهر هنا -->
+        </div>
+    </div>
+
+    <!-- قسم استخراج الرابط -->
+    <div style="margin-top: 2rem; padding: 1rem; background: #e8f5e9; border-radius: 8px;">
+        <h4>🔍 استخراج الرابط</h4>
+        <input type="text" id="inputHiddenText" placeholder="الصق النص هنا" 
+            style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #81c784;">
+        <button onclick="extractLink()" 
+            style="background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+            استخراج الرابط
+        </button>
+        <div id="extractedLink" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="loader" id="loader"></div>
+    <div id="result"></div>
+
+    <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const loader = document.getElementById('loader');
+    const resultDiv = document.getElementById('result');
+
+    // إدارة سحب وإفلات الملفات
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) {
+            handleUpload(e.dataTransfer.files[0]);
+        }
+    });
+
+    // إدارة اختيار الملف
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            handleUpload(e.target.files[0]);
+        }
+    });
+
+    async function handleUpload(file) {
+    loader.style.display = 'block';
+    resultDiv.innerHTML = '';
+    
+    // عرض معاينة الصورة مباشرة
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('imagePreview').style.display = 'block';
+        document.getElementById('previewImage').src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+            showResult(data.url); // <-- عرض الرابط هنا
+        } else {
+            showError(data.error || 'حدث خطأ غير معروف');
+        }
+    } catch (error) {
+        showError('فشل الاتصال بالسيرفر');
+    } finally {
+        loader.style.display = 'none';
+    }
+}
+
+    function showResult(url) {
+    // إخفاء قسم النتيجة القديم (إن وجد)
+    resultDiv.style.display = 'none';
+    
+    // عرض معاينة الصورة والرابط
+    document.getElementById('imagePreview').style.display = 'block';
+    document.getElementById('linkContainer').style.display = 'block';
+    
+    // تعبئة حقل الرابط
+    document.getElementById('uploadedLink').value = url;
+    
+    // حفظ الرابط في localStorage للإخفاء لاحقًا
+    localStorage.setItem('hiddenUrl', url);
+}
+
+
+    function showError(message) {
+        resultDiv.className = 'error';
+        resultDiv.innerHTML = `
+            <h3 style="color: var(--error);">❌ خطأ في الرفع</h3>
+            <p>${message}</p>
+        `;
+    }
+
+    function copyLink(url) {
+    navigator.clipboard.writeText(url)
+        .then(() => {
+            alert('تم نسخ الرابط بنجاح! ✅');
+        })
+        .catch((err) => {
+            alert('فشل في النسخ! ❌ تأكد من السماح بالإذن');
+            console.error('خطأ النسخ:', err);
+        });
+}
+    // استرجاع الرابط المخزن عند تحميل الصفحة
+    
+    // عند تحميل الصفحة: تفريغ الحقول
+    // عند تحميل الصفحة: تفريغ الحقول
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('hiddenText').value = '';
+    document.getElementById('inputHiddenText').value = '';
+});
+
+// دالة الإخفاء
+async function hideLink() {
+    const url = localStorage.getItem('hiddenUrl') || prompt('أدخل الرابط الذي تريد إخفاءه:');
+    const coverText = document.getElementById('hiddenText').value;
+
+    if (!url || !coverText) {
+        alert('يرجى إدخال النص والرابط');
+        return;
+    }
+
+    // تحويل الرابط إلى سلسلة ثنائية باستخدام Unicode
+    const binaryString = encodeURIComponent(url)
+        .split('')
+        .map(char => char.charCodeAt(0).toString(2).padStart(8, '0'))
+        .join('');
+
+    // استخدام محارف غير مرئية لتمثيل البتات (0: \u200B, 1: \u200D)
+    let hiddenCode = '';
+    for (const bit of binaryString) {
+        hiddenCode += (bit === '0') ? '\u200B' : '\u200D';
+    }
+
+    // دمج النص الظاهر مع الرمز المخفي
+    const finalText = coverText + hiddenCode;
+
+    // تخزين في localStorage
+    localStorage.setItem('hiddenContent', finalText);
+
+    // عرض النص الظاهر فقط
+    const outputDiv = document.getElementById('hiddenOutput');
+    outputDiv.textContent = coverText;
+
+    // نسخ النص الكامل عند النقر
+    outputDiv.onclick = () => {
+        navigator.clipboard.writeText(finalText).then(() => {
+            alert('تم النسخ! الصقه في أي مكان.');
+        });
+    };
+}
+
+// دالة الاستخراج
+async function extractLink() {
+    const inputText = document.getElementById('inputHiddenText').value;
+
+    if (!inputText) {
+        alert('الصق النص البديل أولاً!');
+        return;
+    }
+
+    // البحث في قاعدة البيانات
+    try {
+        const response = await fetch(`/get-link?cover_text=${encodeURIComponent(inputText)}`);
+        const data = await response.json();
+        
+        if (data.url) {
+            document.getElementById('extractedLink').innerHTML = `
+                <input type="text" value="${data.url}" readonly>
+            `;
+        } else {
+            alert('الرابط غير موجود!');
+        }
+    } catch (error) {
+        alert('فشل في الاستخراج!');
+    }
+}
+
+// دالة إخفاء الرابط (تعمل حتى بدون رفع صورة)
+function hideLink() {
+    const url = localStorage.getItem('hiddenUrl') || prompt('أدخل الرابط الذي تريد إخفاءه:');
+    const coverText = document.getElementById('hiddenText').value;
+
+    if (!url || !coverText) {
+        alert('يرجى إدخال النص والرابط');
+        return;
+    }
+
+    // تحويل الرابط إلى سلسلة ثنائية
+    const binaryString = encodeURIComponent(url).split('').map(char => 
+        char.charCodeAt(0).toString(2).padStart(8, '0')
+    ).join('');
+
+    // استخدام محارف غير مرئية (0: \u200B, 1: \u200D)
+    let hiddenString = '';
+    for (const bit of binaryString) {
+        hiddenString += (bit === '0') ? '\u200B' : '\u200D';
+    }
+
+    // دمج النص الظاهر مع الرابط المخفي
+    const finalText = coverText + hiddenString;
+
+    // تخزين في localStorage
+    localStorage.setItem('hiddenContent', finalText);
+
+    // عرض النص الظاهر فقط
+    const outputDiv = document.getElementById('hiddenOutput');
+    outputDiv.textContent = coverText;
+
+    // نسخ النص الكامل عند النقر
+    outputDiv.onclick = () => {
+        navigator.clipboard.writeText(finalText).then(() => {
+            alert('تم النسخ! الصقه في أي مكان.');
+        });
+    };
+}
+
+async function extractLink() {
+    const inputText = document.getElementById('inputHiddenText').value;
+
+    if (!inputText) {
+        alert('الصق النص البديل أولاً!');
+        return;
+    }
+
+    
+    
+    
+
+    // استخراج البتات من المحارف غير المرئية
+    let binaryString = '';
+    for (const char of inputText) {
+        if (char === '\u200B') {
+            binaryString += '0';
+        } else if (char === '\u200D') {
+            binaryString += '1';
+        }
+    }
+
+    // تحويل السلسلة الثنائية إلى رابط
+    try {
+        const bytes = [];
+        for (let i = 0; i < binaryString.length; i += 8) {
+            const byte = binaryString.substr(i, 8);
+            bytes.push(String.fromCharCode(parseInt(byte, 2)));
+        }
+        const decodedUrl = decodeURIComponent(bytes.join(''));
+
+        // عرض الرابط
+        document.getElementById('extractedLink').innerHTML = `
+            <input type="text" value="${decodedUrl}" 
+                style="width:100%; padding:10px; border:1px solid #4CAF50; margin-top:10px;">
+        `;
+    } catch (error) {
+        alert('الرابط تالف أو غير موجود!');
+    }
+}
+
+function copyHidden() {
+    const content = document.getElementById('hiddenOutput').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+        alert('تم النسخ! سيظهر النص العادي مع الرابط المخفي');
+    });
+}
+
+// حفظ الرابط في قاعدة البيانات
+async function saveToDatabase(url, coverText, hiddenCode) {
+    try {
+        const response = await fetch('/save-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: url,
+                cover_text: coverText,
+                hidden_code: hiddenCode
+            })
+        });
+        const data = await response.json();
+        console.log(data.message);
+    } catch (error) {
+        console.error('فشل في الحفظ:', error);
+    }
+}
+
+// استرجاع جميع الروابط المخزنة
+async function loadSavedLinks() {
+    try {
+        const response = await fetch('/get-all-links');
+        const links = await response.json();
+        // عرض الروابط في واجهة المستخدم
+        const list = document.getElementById('savedLinksList');
+        list.innerHTML = links.map(link => `
+            <div class="saved-link" onclick="fetchLinkDetails(${link.id})">
+                ${link.cover_text}
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('فشل في التحميل:', error);
+    }
+}
+
+// استرجاع تفاصيل الرابط
+async function fetchLinkDetails(id) {
+    try {
+        const response = await fetch(`/get-link/${id}`);
+        const data = await response.json();
+        document.getElementById('extractedLink').innerHTML = `
+            <input type="text" value="${data.url}" class="link-input">
+        `;
+    } catch (error) {
+        alert('فشل في استرجاع الرابط');
+    }
+}
+
+</script>
+
+</body>
+</html>
